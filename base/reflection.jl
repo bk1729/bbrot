@@ -238,6 +238,9 @@ function code_typed(f::Function, types::ANY; optimize=true)
     asts = []
     for x in _methods(f,types,-1)
         linfo = Core.Inference.func_for_method(x[3],types,x[2])
+        if linfo === Core.Inference.NF
+            error()
+        end
         if optimize
             (tree, ty) = Core.Inference.typeinf(linfo, x[1], x[2], linfo,
                                                 true, true)
@@ -264,6 +267,9 @@ function return_types(f::Function, types::ANY)
     rt = []
     for x in _methods(f,types,-1)
         linfo = Core.Inference.func_for_method(x[3],types,x[2])
+        if linfo === Core.Inference.NF
+            error()
+        end
         (tree, ty) = Core.Inference.typeinf(linfo, x[1], x[2])
         push!(rt, ty)
     end

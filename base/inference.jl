@@ -612,8 +612,7 @@ let stagedcache=Dict{Any,Any}()
                 # don't call staged functions on abstract types.
                 # (see issues #8504, #10230)
                 # we can't guarantee that their type behavior is monotonic.
-                error("cannot call @generated function `", m.func.code.name, "` ",
-                      "with abstract argument types: ", tt)
+                return NF
             end
             f = ccall(:jl_instantiate_staged,Any,(Any,Any,Any),m,tt,env)
             stagedcache[(m,tt,env)] = f
@@ -687,9 +686,8 @@ function abstract_call_gf(f, fargs, argtype, e)
     end
     for (m::SimpleVector) in x
         local linfo
-        try
-            linfo = func_for_method(m[3],argtype,m[2])
-        catch
+        linfo = func_for_method(m[3],argtype,m[2])
+        if linfo === NF
             rettype = Any
             break
         end
@@ -743,18 +741,17 @@ function invoke_tfunc(f, types, argtype)
     if is(argtype,Bottom)
         return Bottom
     end
-    try
-        meth = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, types)
-        if is(meth, nothing)
-            return Any
-        end
-        (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
-                          argtype, meth.sig, meth.tvars)::SimpleVector
-        linfo = func_for_method(meth, types, env)
-        return typeinf(linfo, ti, env, linfo)[2]
-    catch
+    meth = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, types)
+    if is(meth, nothing)
         return Any
     end
+    (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
+                      argtype, meth.sig, meth.tvars)::SimpleVector
+    linfo = func_for_method(meth, types, env)
+    if linfo === NF
+        return Any
+    end
+    return typeinf(linfo, ti, env, linfo)[2]
 end
 
 # `types` is an array of inferred types for expressions in `args`.
@@ -2164,9 +2161,8 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     meth = meth[1]::SimpleVector
 
     local linfo
-    try
-        linfo = func_for_method(meth[3],atype,meth[2])
-    catch
+    linfo = func_for_method(meth[3],atype,meth[2])
+    if linfo === NF
         return NF
     end
 
